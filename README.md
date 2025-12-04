@@ -189,6 +189,14 @@ simply dropped and the client sees whatever it got when the timeout
 expired.  If it's false, the most up-to-date state of the aggregation
 is simply retransmitted to the client.  The default is false.
 
+The `--logic-class CLASS` option specifies which routing logic class
+to use.  The default is `LspLogic`.  You can specify a simple class
+name (which will be looked up in the `rassumfrassum.frassum` module)
+or a fully qualified class name like `mymodule.MyCustomLogic`.  This
+is useful for extending rass with custom routing behavior by
+subclassing `LspLogic`.  This is untested and probably overkill for
+now, might be useful in the future.
+
 [eglot]: https://github.com/joaotavora/eglot
 [lsp]: https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/
 [build-status]: https://github.com/joaotavora/rassumfrassum/actions/workflows/test.yml

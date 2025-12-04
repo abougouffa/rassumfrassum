@@ -5,6 +5,7 @@ rassumfrassum - A simple LSP multiplexer that forwards JSONRPC messages.
 
 import argparse
 import asyncio
+import importlib
 import json
 import os
 import sys
@@ -134,8 +135,19 @@ async def run_multiplexer(
         p = await launch_server(cmd, i)
         procs.append(p)
 
-    # Create message router
-    logic = LspLogic(procs[0].server)
+    # Create message router using specified logic class
+    class_name = opts.logic_class
+    if '.' in class_name:
+        # Fully qualified name: module.path.ClassName
+        module_name, class_name = class_name.rsplit('.', 1)
+        module = importlib.import_module(module_name)
+        logic_class = getattr(module, class_name)
+    else:
+        # Simple name: look up in frassum module
+        from . import frassum
+        logic_class = getattr(frassum, class_name)
+
+    logic = logic_class(procs[0].server)
 
     # Track ongoing aggregations: key -> AggregationState
     pending_aggregations: dict[tuple, AggregationState] = {}
@@ -583,6 +595,13 @@ def main() -> None:
         '--drop-tardy',
         action='store_true',
         help='Drop tardy messages instead of re-sending aggregations.',
+    )
+    parser.add_argument(
+        '--logic-class',
+        type=str,
+        default='LspLogic',
+        metavar='CLASS',
+        help='Logic class to use for routing (default: LspLogic).',
     )
     opts = parser.parse_args(rass_args)
 
