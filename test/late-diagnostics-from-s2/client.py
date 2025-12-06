@@ -4,8 +4,8 @@ Test client for late diagnostics scenario.
 """
 
 
-from rassumfrassum.tete import do_initialize, do_initialized, do_shutdown, send_and_log, log
-from rassumfrassum.jaja import read_message_sync
+from rassumfrassum.test import do_initialize, do_initialized, do_shutdown, send_and_log, log
+from rassumfrassum.json import read_message_sync
 
 def main():
     """Send a sequence of LSP messages."""

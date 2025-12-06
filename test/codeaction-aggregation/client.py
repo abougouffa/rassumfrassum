@@ -5,8 +5,8 @@ with codeActionProvider capability.
 """
 
 
-from rassumfrassum.tete import send_and_log, log
-from rassumfrassum.jaja import read_message_sync
+from rassumfrassum.test import send_and_log, log
+from rassumfrassum.json import read_message_sync
 
 def main():
     """Test that code actions are aggregated from multiple servers."""

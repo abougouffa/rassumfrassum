@@ -6,8 +6,8 @@ Full, the merged capability should be Full.
 """
 
 
-from rassumfrassum.tete import send_and_log, log
-from rassumfrassum.jaja import read_message_sync
+from rassumfrassum.test import send_and_log, log
+from rassumfrassum.json import read_message_sync
 
 def main():
     """Test that textDocumentSync=1 wins."""

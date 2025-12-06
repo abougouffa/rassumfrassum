@@ -78,17 +78,20 @@ routed:
 
 The codebase lives in `src/rassumfrassum/` and is split into several modules:
 
-- `rassum.py` is the main entry point with command-line
-  processing. `run_multiplexer` starts a bunch of async tasks to read
-  from the clients and servers, and waits for all of them.  The local
-  lexical state in `run_multiplexer` tracks JSONRPC requests,
-  responses, and notifications, and crucially the progress of ongoing
-  aggregation attempts.  In as much as possible, `rassum.py` should be
-  just a JSONRPC-aggregator and not know anything about particular
-  custom handling of LSP message types.  There are a few violations of
-  this principle, but whenever it needs to know what to do, it
-  asks/informs the upper layer in `frassum.py` about in-transit
-  messages.
+- `main.py` is the main entry point with command-line processing and
+  argument parsing. It calls `run_multiplexer` from `rassum.py` to
+  start the multiplexer.
+
+- `rassum.py` contains `run_multiplexer` which starts a bunch of async
+  tasks to read from the clients and servers, and waits for all of
+  them.  The local lexical state in `run_multiplexer` tracks JSONRPC
+  requests, responses, and notifications, and crucially the progress
+  of ongoing aggregation attempts.  In as much as possible,
+  `rassum.py` should be just a JSONRPC-aggregator and not know
+  anything about particular custom handling of LSP message types.
+  There are a few violations of this principle, but whenever it needs
+  to know what to do, it asks/informs the upper layer in `frassum.py`
+  about in-transit messages.
 
 - `frassum.py` contains the business logic used by `rassum.py` facilities.
   This one fully knows about LSP.  So it knows, for example, how to
@@ -96,13 +99,14 @@ The codebase lives in `src/rassumfrassum/` and is split into several modules:
   `textDocument/publishDiagnostics` and how to do the actual work for
   aggregation.
 
-- `lolo.py` provides logging utilities for debugging and monitoring
-  the multiplexer's operation.
+- `util.py` provides logging utilities and general-purpose helpers
+  like dict merging for debugging and monitoring the multiplexer's
+  operation.
 
-- `tete.py` contains test utilities used by both client and server
+- `test.py` contains test utilities used by both client and server
   test scripts.
-  
-- `jaja.py` handles bare JSON-over-stdio logistics and is completely
+
+- `json.py` handles bare JSON-over-stdio logistics and is completely
   ignorant of LSP. It deals with protocol framing and I/O operations.
 
 ### Testing
@@ -112,7 +116,7 @@ There are tests under `test/`. Each test is a subdir, usually with a
 multiple servers) and a `run.sh`, which creates a FIFO special file to
 wire up the stdio connections and launches `client.py` connected to
 `rass`.  `client.py` has the test assertions.  Both `client.py` and
-`server.py` use common utils from `src/rassumfrassum/tete.py`.
+`server.py` use common utils from `src/rassumfrassum/test.py`.
 
 To run all tests, use `test/run-all.sh`.
 

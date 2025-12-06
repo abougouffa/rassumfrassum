@@ -30,7 +30,7 @@ Homepage = "https://github.com/joaotavora/rassumfrassum"
 Issues = "https://github.com/joaotavora/rassumfrassum/issues"
 
 [project.scripts]
-rass = "rassumfrassum.rassum:main"
+rass = "rassumfrassum.main:main"
 
 [tool.basedpyright]
 typeCheckingMode = "standard"

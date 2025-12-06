@@ -5,8 +5,8 @@ Verifies that stale diagnostics are dropped.
 """
 
 
-from rassumfrassum.tete import do_initialize, do_initialized, do_shutdown, send_and_log, log, assert_no_message_pending
-from rassumfrassum.jaja import read_message_sync
+from rassumfrassum.test import do_initialize, do_initialized, do_shutdown, send_and_log, log, assert_no_message_pending
+from rassumfrassum.json import read_message_sync
 
 def main():
     """Test that stale diagnostics are dropped."""

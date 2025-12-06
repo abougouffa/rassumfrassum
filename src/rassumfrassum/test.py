@@ -8,7 +8,7 @@ import select
 import time
 from typing import Callable, cast
 
-from rassumfrassum.jaja import JSON, read_message_sync, write_message_sync
+from rassumfrassum.json import JSON, read_message_sync, write_message_sync
 
 # Client utilities
 

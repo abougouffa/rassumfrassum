@@ -7,7 +7,7 @@ import time
 import sys
 
 
-from rassumfrassum.jaja import read_message_sync, write_message_sync
+from rassumfrassum.json import read_message_sync, write_message_sync
 import argparse
 
 parser = argparse.ArgumentParser()

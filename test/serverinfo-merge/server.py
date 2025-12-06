@@ -2,7 +2,7 @@
 """Server for serverinfo-merge test"""
 
 
-from rassumfrassum.tete import run_server
+from rassumfrassum.test import run_server
 import argparse
 
 parser = argparse.ArgumentParser()

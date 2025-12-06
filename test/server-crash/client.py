@@ -4,8 +4,8 @@ Test client that expects rass to exit when server crashes.
 """
 
 
-from rassumfrassum.tete import do_initialize, do_initialized, log
-from rassumfrassum.jaja import read_message_sync
+from rassumfrassum.test import do_initialize, do_initialized, log
+from rassumfrassum.json import read_message_sync
 
 def main():
     """Send initialize and initialized, then expect connection to die."""

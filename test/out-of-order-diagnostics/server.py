@@ -7,7 +7,7 @@ import threading
 import time
 
 
-from rassumfrassum.tete import run_server, make_diagnostic, write_message_sync, log
+from rassumfrassum.test import run_server, make_diagnostic, write_message_sync, log
 import argparse
 
 parser = argparse.ArgumentParser()
