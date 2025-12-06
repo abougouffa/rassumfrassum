@@ -13,7 +13,7 @@ class Server:
     """Information about a logical LSP server."""
 
     name: str
-    capabilities: JSON = field(default_factory=dict)
+    caps: JSON = field(default_factory=dict)
     cookie: object = None
 
 
@@ -53,7 +53,11 @@ class LspLogic:
             List of servers that should receive the request
         """
         # Check for data cookie recovery
-        data = params.get('data') if params else None
+        data = (
+            params.get('data')
+            if params and method.endswith("resolve")
+            else None
+        )
         if isinstance(data, str) and data.startswith('rassumfrassum-'):
             # This is a cookie ID - recover the original data
             if data in self.data_cookies:
@@ -69,18 +73,16 @@ class LspLogic:
 
         # Route requests to _all_ servers supporting this
         if method == 'textDocument/codeAction':
-            return [
-                s for s in servers if s.capabilities.get('codeActionProvider')
-            ]
+            return [s for s in servers if s.caps.get('codeActionProvider')]
 
-        # Route requests to _first_ server supporting this capability
+        # Route these to at most one server supporting this capability
         if cap := {
             'textDocument/rename': 'renameProvider',
             'textDocument/formatting': 'documentFormattingProvider',
             'textDocument/rangeFormatting': 'documentRangeFormattingProvider',
         }.get(method):
             for s in servers:
-                if s.capabilities.get(cap):
+                if s.caps.get(cap):
                     return [s]
             return []
 
@@ -138,23 +140,6 @@ class LspLogic:
         """
         pass
 
-    def _stash_data_maybe(self, payload: JSON, server: Server):
-        """Stash data field behind a cookie ID, replacing it in the payload."""
-        # FIXME: investigate why payload can be None
-        if not payload or 'data' not in payload:
-            return
-        # Generate unique ID
-        self._data_cookie_counter += 1
-        cookie_id = f"rassumfrassum-{self._data_cookie_counter}"
-        # Store original data
-        self.data_cookies[cookie_id] = DataCookie(
-            data=payload['data'],
-            server=server
-        )
-        # Replace data with cookie ID
-        payload['data'] = cookie_id
-
-
     def on_server_notification(
         self, method: str, params: JSON, source: Server
     ) -> None:
@@ -179,17 +164,20 @@ class LspLogic:
         Handle server responses.
         Returns the (potentially modified) response_payload.
         """
+        if not response_payload or is_error:
+            return
+
         # Stash data fields in codeAction responses
-        if method == 'textDocument/codeAction' and not is_error:
+        if method == 'textDocument/codeAction':
             for action in cast(list, response_payload):
                 self._stash_data_maybe(action, server)
 
         # Extract server name and capabilities from initialize response
-        if method == 'initialize' and not is_error:
+        if method == 'initialize':
             if 'name' in response_payload.get('serverInfo', {}):
                 server.name = response_payload['serverInfo']['name']
             caps = response_payload.get('capabilities')
-            server.capabilities = caps.copy() if caps else {}
+            server.caps = caps.copy() if caps else {}
 
     def get_notif_aggregation_key(
         self, method: str | None, payload: JSON
@@ -276,53 +264,36 @@ class LspLogic:
         primary_payload = source == self.primary_server
 
         # Merge capabilities by iterating through all keys
-        merged_caps = aggregate.get('capabilities', {})
-        new_caps = payload.get('capabilities', {})
+        res = aggregate.get('capabilities', {})
+        new = payload.get('capabilities', {})
 
-        for cap_name, cap_value in new_caps.items():
-            if cap_name == 'textDocumentSync':
+        for cap, newval in new.items():
+            def t1sync(x):
+                return x == 1 or (
+                    isinstance(x, dict) and x.get("change") == 1
+                )
 
-                def t1sync(x):
-                    return x == 1 or (
-                        isinstance(x, dict) and x.get("change") == 1
-                    )
+            if res.get(cap) is None:
+                res[cap] = newval
+            elif cap == 'textDocumentSync' and t1sync(newval):
+                res[cap] = newval
+            elif _is_scalar(newval) and res.get(cap) is None:
+                res[cap] = newval
+            elif _is_scalar(res.get(cap)) and not _is_scalar(newval):
+                res[cap] = newval
+            elif (isinstance(res.get(cap), dict) and isinstance(newval, dict)
+                  and cap not in ["semanticTokensProvider"]):
+                # FIXME: This generic merging needs work. For example,
+                # if one server has hoverProvider: true and another
+                # has hoverProvider: {"workDoneProgress": true}, the
+                # result should be {"workDoneProgress": false} to
+                # retain the truish value while not announcing a
+                # capability that one server doesn't support. However,
+                # the correct merging strategy likely varies per
+                # capability.
+                res[cap] = _mymerge(res.get(cap), newval)
 
-                current_sync = merged_caps.get('textDocumentSync')
-                if not t1sync(current_sync) and t1sync(cap_value):
-                    merged_caps['textDocumentSync'] = cap_value
-            elif (
-                cap_name in {'renameProvider', 'codeActionProvider'}
-                or primary_payload
-                or merged_caps.get(cap_name) is None
-            ):
-                # FIXME: this "generic merging" logic is still quite
-                # dumb.
-                current = merged_caps.get(cap_name)
-                if isinstance(current, bool) and cap_value:
-                    merged_caps[cap_name] = cap_value
-                    continue
-
-                # If new_value is a boolean, handle it simply
-                if not isinstance(cap_value, dict):
-                    current = merged_caps.get(cap_name)
-                    if not isinstance(current, dict):
-                        merged_caps[cap_name] = cap_value
-                    continue
-
-                # new_value is a dict, proceed with deep merge
-                merged_caps.setdefault(cap_name, {})
-                current = merged_caps.get(cap_name)
-                for key, value in cap_value.items():
-                    if key not in current:
-                        current[key] = value
-                    elif isinstance(value, bool) and isinstance(
-                        current[key], bool
-                    ):
-                        current[key] = value or current[key]
-                    else:
-                        current[key] = value
-
-        aggregate['capabilities'] = merged_caps
+        aggregate['capabilities'] = res
 
         # Merge serverInfo
         s_info = payload.get('serverInfo', {})
@@ -344,3 +315,45 @@ class LspLogic:
             }
         # Return the mutated aggregate
         return aggregate
+
+    def _stash_data_maybe(self, payload: JSON, server: Server):
+        """Stash data field behind a cookie ID, replacing it in the payload."""
+        # FIXME: investigate why payload can be None
+        if not payload or 'data' not in payload:
+            return
+        # Generate unique ID
+        self._data_cookie_counter += 1
+        cookie_id = f"rassumfrassum-{self._data_cookie_counter}"
+        # Store original data
+        self.data_cookies[cookie_id] = DataCookie(
+            data=payload['data'], server=server
+        )
+        # Replace data with cookie ID
+        payload['data'] = cookie_id
+
+def _is_scalar(v):
+        return not isinstance(v, (dict, list, set, tuple))
+
+def _mymerge(d1 : JSON, d2 : JSON):
+    """Merge d2 into d1 destructively.
+    Non-scalars win over scalars; d1 wins on scalar conflicts."""
+
+    result = d1
+    for key, value in d2.items():
+        if key in result:
+            v1, v2 = result[key], value
+            # Both dicts: recursive merge
+            if isinstance(v1, dict) and isinstance(v2, dict):
+                result[key] = _mymerge(v1, v2)
+                # Both lists: concatenate
+            elif isinstance(v1, list) and isinstance(v2, list):
+                result[key] = v1 + v2
+                # One scalar, one non-scalar: non-scalar wins
+            elif _is_scalar(v1) and not _is_scalar(v2):
+                result[key] = v2  # d2's non-scalar wins
+            elif not _is_scalar(v1) and _is_scalar(v2):
+                result[key] = v1  # d1's non-scalar wins
+                # Both scalars: d1 wins (keep result[key])
+        else:
+            result[key] = value
+    return result
