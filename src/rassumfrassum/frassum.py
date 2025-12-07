@@ -17,26 +17,16 @@ class Server:
     cookie: object = None
 
 
-@dataclass
-class DataCookie:
-    """Data associated with a server."""
-
-    data: JSON
-    server: Server
-
-
 class LspLogic:
     """Decide on message routing and response aggregation."""
 
-    def __init__(self, primary_server: Server):
-        """Initialize with reference to the primary server."""
-        self.primary_server = primary_server
+    def __init__(self, servers: list[Server]):
+        """Initialize with all servers."""
+        self.servers = servers
         # Track document versions: URI -> version number
         self.document_versions: dict[str, int] = {}
-        # Track data cookies: key -> DataCookie
-        self.data_cookies: dict[str, DataCookie] = {}
-        # Counter for generating unique data cookie IDs
-        self._data_cookie_counter: int = 0
+        # Map server ID to server object for data recovery
+        self.server_by_id: dict[int, Server] = {id(s): s for s in servers}
 
     def servers_to_route_to(
         self, method: str, params: JSON, servers: list[Server]
@@ -52,20 +42,18 @@ class LspLogic:
         Returns:
             List of servers that should receive the request
         """
-        # Check for data cookie recovery
+        # Check for data recovery from inline stash
         data = (
             params.get('data')
             if params and method.endswith("resolve")
             else None
         )
-        if isinstance(data, str) and data.startswith('rassumfrassum-'):
-            # This is a cookie ID - recover the original data
-            if data in self.data_cookies:
-                cookie = self.data_cookies[data]
-                # Replace cookie ID with original data
-                params['data'] = cookie.data
-                # Route only to the server that sent this data
-                return [cookie.server]
+        if (isinstance(data, dict) and
+            (probe := data.get('frassum-server')) and
+            (target := self.server_by_id.get(probe))):
+            # Replace with original data
+            params['data'] = data.get('frassum-data')
+            return [target]
 
         # initialize and shutdown go to all servers
         if method in ['initialize', 'shutdown']:
@@ -87,7 +75,7 @@ class LspLogic:
             return []
 
         # Default: route to primary server
-        return [self.primary_server] if servers else []
+        return [self.servers[0]] if servers else []
 
     def on_client_request(self, method: str, params: JSON) -> None:
         """
@@ -261,7 +249,7 @@ class LspLogic:
         """Merge initialize response payloads (result objects)."""
 
         # Determine if this response is from primary
-        primary_payload = source == self.primary_server
+        primary_payload = source == self.servers[0]
 
         # Merge capabilities by iterating through all keys
         res = aggregate.get('capabilities', {})
@@ -317,16 +305,13 @@ class LspLogic:
         return aggregate
 
     def _stash_data_maybe(self, payload: JSON, server: Server):
-        """Stash data field behind a cookie ID, replacing it in the payload."""
+        """Stash data field with server ID inline."""
         # FIXME: investigate why payload can be None
         if not payload or 'data' not in payload:
             return
-        # Generate unique ID
-        self._data_cookie_counter += 1
-        cookie_id = f"rassumfrassum-{self._data_cookie_counter}"
-        # Store original data
-        self.data_cookies[cookie_id] = DataCookie(
-            data=payload['data'], server=server
-        )
-        # Replace data with cookie ID
-        payload['data'] = cookie_id
+        # Replace data with inline dict containing server ID and original data
+        original_data = payload['data']
+        payload['data'] = {
+            'frassum-server': id(server),
+            'frassum-data': original_data
+        }

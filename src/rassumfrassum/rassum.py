@@ -146,7 +146,7 @@ async def run_multiplexer(
         from . import frassum
         logic_class = getattr(frassum, class_name)
 
-    logic = logic_class(procs[0].server)
+    logic = logic_class([p.server for p in procs])
 
     # Track ongoing aggregations: key -> AggregationState
     pending_aggregations: dict[tuple, AggregationState] = {}
