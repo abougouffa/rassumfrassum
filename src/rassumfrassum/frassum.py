@@ -3,9 +3,13 @@ LSP-specific message routing and merging logic.
 """
 
 from dataclasses import dataclass, field
-from .json import JSON
 from typing import cast
-from .util import log, is_scalar, dmerge  # pyright: ignore[reportUnusedImport]  # noqa: F401
+
+from .json import JSON
+from .util import (
+    dmerge,
+    is_scalar,
+)
 
 
 @dataclass
@@ -28,11 +32,11 @@ class LspLogic:
         # Map server ID to server object for data recovery
         self.server_by_id: dict[int, Server] = {id(s): s for s in servers}
 
-    def servers_to_route_to(
+    def on_client_request(
         self, method: str, params: JSON, servers: list[Server]
     ) -> list[Server]:
         """
-        Determine which servers should receive this request.
+        Handle client requests and determine who receives it
 
         Args:
             method: LSP method name
@@ -48,9 +52,11 @@ class LspLogic:
             if params and method.endswith("resolve")
             else None
         )
-        if (isinstance(data, dict) and
-            (probe := data.get('frassum-server')) and
-            (target := self.server_by_id.get(probe))):
+        if (
+            isinstance(data, dict)
+            and (probe := data.get('frassum-server'))
+            and (target := self.server_by_id.get(probe))
+        ):
             # Replace with original data
             params['data'] = data.get('frassum-data')
             return [target]
@@ -70,7 +76,8 @@ class LspLogic:
                 return cands
             if k := params.get("context", {}).get("triggerCharacter"):
                 return [
-                    s for s in cands
+                    s
+                    for s in cands
                     if (cp := s.caps.get("completionProvider"))
                     and k in cp.get("triggerCharacters", [])
                 ]
@@ -90,12 +97,6 @@ class LspLogic:
 
         # Default: route to primary server
         return [self.servers[0]] if servers else []
-
-    def on_client_request(self, method: str, params: JSON) -> None:
-        """
-        Handle client requests to servers.  May modify params.
-        """
-        pass
 
     def on_client_notification(self, method: str, params: JSON) -> None:
         """
@@ -256,8 +257,10 @@ class LspLogic:
             # Merge code actions - just concatenate
             return (cast(list, aggregate) or []) + (cast(list, payload) or [])
         elif method == 'textDocument/completion':
+
             def normalize(x):
                 return x if isinstance(x, dict) else {'items': x}
+
             # FIXME: Deep merging CompletionList properties is wrong
             # for many fields (e.g., isIncomplete should probably be
             # OR'd)
@@ -286,10 +289,9 @@ class LspLogic:
         new = payload.get('capabilities', {})
 
         for cap, newval in new.items():
+
             def t1sync(x):
-                return x == 1 or (
-                    isinstance(x, dict) and x.get("change") == 1
-                )
+                return x == 1 or (isinstance(x, dict) and x.get("change") == 1)
 
             if res.get(cap) is None:
                 res[cap] = newval
@@ -299,8 +301,11 @@ class LspLogic:
                 res[cap] = newval
             elif is_scalar(res.get(cap)) and not is_scalar(newval):
                 res[cap] = newval
-            elif (isinstance(res.get(cap), dict) and isinstance(newval, dict)
-                  and cap not in ["semanticTokensProvider"]):
+            elif (
+                isinstance(res.get(cap), dict)
+                and isinstance(newval, dict)
+                and cap not in ["semanticTokensProvider"]
+            ):
                 # FIXME: This generic merging needs work. For example,
                 # if one server has hoverProvider: true and another
                 # has hoverProvider: {"workDoneProgress": true}, the
@@ -343,5 +348,5 @@ class LspLogic:
         original_data = payload['data']
         payload['data'] = {
             'frassum-server': id(server),
-            'frassum-data': original_data
+            'frassum-data': original_data,
         }

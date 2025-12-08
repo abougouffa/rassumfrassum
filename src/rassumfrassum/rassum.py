@@ -12,7 +12,7 @@ import traceback
 from dataclasses import dataclass, field
 from typing import Optional, cast
 
-from .frassum import LspLogic, Server
+from .frassum import Server
 from .json import (
     JSON,
 )
@@ -34,7 +34,7 @@ class InferiorProcess:
 
     def __repr__(self):
         return f"InferiorProcess({self.name})"
-    
+
     process: asyncio.subprocess.Process
     server: Server
 
@@ -144,6 +144,7 @@ async def run_multiplexer(
     else:
         # Simple name: look up in frassum module
         from . import frassum
+
         logic_class = getattr(frassum, class_name)
 
     logic = logic_class([p.server for p in procs])
@@ -238,17 +239,18 @@ async def run_multiplexer(
                     # Request
                     log_message("-->", msg, method)
                     params = msg.get("params", {})
-                    logic.on_client_request(method, params)
                     # Track shutdown requests.  FIXME: breaks
                     # abstraction
                     if method == "shutdown":
                         shutting_down = True
                     # Determine which servers to route to.
-                    target_servers = logic.servers_to_route_to(
+                    target_servers = logic.on_client_request(
                         method, params, [proc.server for proc in procs]
                     )
-                    target_procs = cast(list[InferiorProcess],
-                                        [s.cookie for s in target_servers])
+                    target_procs = cast(
+                        list[InferiorProcess],
+                        [s.cookie for s in target_servers],
+                    )
 
                     # Send to selected servers
                     for p in target_procs:
@@ -320,11 +322,11 @@ async def run_multiplexer(
     ):
         ag = pending_aggregations.get(aggregation_key)
 
-        
         if not ag:
             outstanding = targets.copy()
 
             outstanding.discard(proc)
+
             # First message in this aggregation
             async def send_whatever_is_there(state: AggregationState, method):
                 await asyncio.sleep(
@@ -333,6 +335,7 @@ async def run_multiplexer(
                 log(f"Timeout for aggregation for {method} ({id(state)})!")
                 state.dispatched = "timed-out"
                 await send_to_client(_reconstruct(state), method)
+
             ag = AggregationState(
                 outstanding=outstanding,
                 id=req_id,
@@ -347,10 +350,7 @@ async def run_multiplexer(
             method = ag.method
             # Not the first message - aggregate with previous
             if ag.dispatched:
-                log(
-                    f"Tardy {proc.name} aggregation "
-                    f"for {method} ({id(ag)})"
-                )
+                log(f"Tardy {proc.name} aggregation for {method} ({id(ag)})")
             ag.aggregate = logic.aggregate_payloads(
                 ag.method,
                 ag.aggregate,
@@ -386,9 +386,7 @@ async def run_multiplexer(
                             f"aggregation for {method} ({id(ag)})!"
                         )
                 else:
-                    log(
-                        f"Completing aggregation for {method} ({id(ag)})!"
-                    )
+                    log(f"Completing aggregation for {method} ({id(ag)})!")
                 # Cancel timeout
                 if ag.timeout_task:
                     ag.timeout_task.cancel()
@@ -444,7 +442,7 @@ async def run_multiplexer(
 
                 # Server response OR Server notification
                 aggregation_key = None
-                targets = set(procs) # responses can override this
+                targets = set(procs)  # responses can override this
                 is_error = False
 
                 if method is None:
