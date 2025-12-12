@@ -3,83 +3,112 @@
 
 # rassumfrassum
 
-Connects one LSP client to multiple LSP servers. 
+Connect an LSP client to multiple LSP servers. 
 
-It spawns one or more stdio-enabled [LSP][lsp] server subprocesses,
-communicates with them via pipes, and handles a client connected to
-its own stdio.  `rass` behaves like an LSP server, so clients think
-they are talking to single LSP server, even though they are secretly
-talking to many.
+The `rass` program, the main entry point, behaves like an LSP stdio
+server, so clients think they are talking to single LSP server, even
+though they are secretly talking to many.  Behind the scenes more
+stdio [LSP][lsp] server subprocesses are spawned.
 
 ![demo](./doc/demo.gif)
 
-An LSP client like Emacs's [Eglot][eglot] can find a python file in
-some project and invoke it like so (`C-u M-x eglot` probably helps):
+## Setup
+
+Install the `rass` tool:
 
 ```bash
-rass -- basedpyright-langserver --stdio -- ruff server
+pip install rassumfrassum
 ```
 
-Or use the bundled `python` preset for the same effect:
+Now install some language servers, say Python's [ty][ty] and [ruff][ruff]:
+
+```
+pip install ty ruff
+```
+
+Tell your LSP client to call `rass python`:
+
+* In Emacs's [Eglot][eglot], find a Python file in a project and `C-u
+M-x eglot RET rass python RET`.
+
+* In vanilla [Neovim][neovim], use this snippet (briefly tested with `nvim --clean -u snippet.lua`)
+
+```lua
+vim.lsp.config('rass-python', {
+   cmd = {'rass','python'},
+   filetypes = { 'python' },
+   root_markers = { '.git', },
+})
+vim.lsp.enable('rass-python')
+```
+
+## Presets
+
+Presets give you a uniform way to start typical sets of language
+servers for a given language, while being flexible enough for
+tweaking.  Most presets would be Python files with a `get_servers()`
+function that returns a list of server commands.  
+
+Advanced presets can hook into LSP messages to hide the typical
+initialization/configuration pains from clients, see
+[vue.py][vue-preset].
+
+### Using Presets
+
+The bundled `python` preset runs [ty][ty] and [ruff][ruff]:
 
 ```bash
 rass python
 ```
 
-This should start managing Python files within a project with two
-servers instead of one.  The `--` separators divide `rass`'s options from
-server arguments.
+You can add more servers on top of a preset using `--` separators.
+For example, to add [codebook][codebook] for spell checking:
 
-To set up other clients, check their documentation.  
+```bash
+rass python -- codebook-lsp server
+```
+
+### User Presets
+
+You can create your own presets or override bundled ones. Rass searches
+these locations in order:
+
+1. `$XDG_CONFIG_HOME/rassumfrassum/` (if XDG_CONFIG_HOME is set)
+2. `~/.config/rassumfrassum/` (default)
+3. `~/.rassumfrassum/` (legacy)
+4. Bundled presets directory (last resort)
+
+To use `basedpyright` instead of `ty`, create `~/.config/rassumfrassum/python.py`:
+
+```python
+"""Python preset using basedpyright instead of ty."""
+
+def get_servers():
+    return [
+        ['basedpyright-langserver', '--stdio'],
+        ['ruff', 'server']
+    ]
+```
 
 ## Issues?
 
 [Read this first](#bugs_and_issues), please.
 
-## Installation
-
-I hope to have made `pip install rassumfrassum` do the right thing by
-now.  If I haven't, you can probably clone this repo and call the
-top-level `rass` wrapper script directly, since this doesn't have any
-dependencies.
-
 ## Features
 
-- **Presets** - Use `rass python` instead of typing full server commands.
-  Bundled presets: `python` (basedpyright+ruff), `vue` (vue-language-server+tailwindcss).
-  Custom presets via Python files.
-- Merges and synchronizes diagnostics from multiple servers into a
-  single `textDocument/publishDiagnostics` event.
-- Requests `textDocument/codeActions` from all servers supporting it;
-  other requests go to the first server that supports the
-  corresponding capability.
-- Tries its best to merge server capabilities announcements and to
-  track which inferior server supports which capability.
 - Zero dependencies beyond Python standard library (3.10+)
 
 ## Under the hood
 
-### Message Routing
-
-JSONRPC has requests, responses, and notifications. Here's how they're
-routed:
-
-**From client to servers:**
-
-- All notifications go unchanged directly to all servers
-
-- Some requests go only to one server, and that server's response is
-  forwarded to the client
-
-- Other requests go to multiple servers, and their responses are
-  merged if they arrive in time
-
-**From servers to client:**
-
-- Most notifications go directly through, but some like
-  `textDocument/publishDiagnostics` wait for all servers to send
-  theirs, then the results are merged before forwarding to the client
-
+- Tries its best to merge server capabilities announcements into a
+  consistent aggregate capability set.  
+- Track which inferior server supports which capability.
+- Merges and synchronizes diagnostics from multiple servers into a
+  single `textDocument/publishDiagnostics` event.
+- Client requests for `textDocument/codeActions` and
+  `textDocument/completions` go to all servers supporting it, other
+  requests go to the first server that supports the corresponding
+  capability.
 - All server requests go to the client.  ID tweaking is necessary
   because servers don't know about each other and they could clash.
 
@@ -90,6 +119,9 @@ The codebase lives in `src/rassumfrassum/` and is split into several modules:
 - `main.py` is the main entry point with command-line processing and
   argument parsing. It calls `run_multiplexer` from `rassum.py` to
   start the multiplexer.
+
+- `presets.py` handles preset discovery and loading, searching user
+  config directories (XDG-compliant) and bundled presets.
 
 - `rassum.py` contains `run_multiplexer` which starts a bunch of async
   tasks to read from the clients and servers, and waits for all of
@@ -209,10 +241,16 @@ to use.  The default is `LspLogic`.  You can specify a simple class
 name (which will be looked up in the `rassumfrassum.frassum` module)
 or a fully qualified class name like `mymodule.MyCustomLogic`.  This
 is useful for extending rass with custom routing behavior by
-subclassing `LspLogic`.  This is untested and probably overkill for
-now, might be useful in the future.
+subclassing `LspLogic`.
 
 [eglot]: https://github.com/joaotavora/eglot
 [lsp]: https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/
 [build-status]: https://github.com/joaotavora/rassumfrassum/actions/workflows/test.yml
 [lspx]: https://github.com/thefrontside/lspx
+[lsplex]: https://github.com/joaotavora/lsplex
+[ty]: https://github.com/astral-sh/ty
+[ruff]: https://github.com/astral-sh/ruff
+[neovim]: https://neovim.io/
+[codebook]: https://github.com/blopker/codebook
+[typos]: https://github.com/tekumara/typos-lsp
+[vue-preset]: https://github.com/joaotavora/rassumfrassum/blob/master/presets/vue.py

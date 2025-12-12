@@ -5,11 +5,9 @@ rassumfrassum - A simple LSP multiplexer that forwards JSONRPC messages.
 
 import argparse
 import asyncio
-import importlib
-import importlib.util
 import sys
-from typing import Any
 
+from .presets import load_preset
 from .rassum import run_multiplexer
 from .util import (
     log,
@@ -21,56 +19,7 @@ from .util import (
     LOG_DEBUG,
     LOG_EVENT,
     LOG_TRACE,
-    PresetResult,
 )
-
-
-def load_preset(name_or_path: str) -> PresetResult:
-    """
-    Load preset by name or file path.
-
-    Args:
-        name_or_path: 'python' or './my_preset.py'
-    """
-    # Path detection: contains '/' means external file
-    if '/' in name_or_path:
-        module = _load_preset_from_file(name_or_path)
-    else:
-        module = _load_preset_from_bundle(name_or_path)
-
-    servers_fn = getattr(module, 'get_servers', None)
-    lclass_fn = getattr(module, 'get_logic_class', None)
-
-    return (
-        servers_fn() if servers_fn else [],
-        lclass_fn() if lclass_fn else None,
-    )
-
-
-def _load_preset_from_file(filepath: str) -> Any:
-    """Load from external Python file using importlib.util."""
-    import os
-
-    abs_path = os.path.abspath(filepath)
-
-    spec = importlib.util.spec_from_file_location("_preset_module", abs_path)
-    if spec is None or spec.loader is None:
-        raise FileNotFoundError(f"Cannot load preset from {filepath}")
-
-    module = importlib.util.module_from_spec(spec)
-    sys.modules["_preset_module"] = module
-    spec.loader.exec_module(module)
-    return module
-
-
-def _load_preset_from_bundle(name: str) -> Any:
-    """Load bundled preset by name from project root presets/ directory."""
-    import os
-    # Get project root (two levels up from this file)
-    this_dir = os.path.dirname(os.path.abspath(__file__))
-    project_root = os.path.dirname(os.path.dirname(this_dir))
-    preset_path = os.path.join(project_root, 'presets', f'{name}.py')
-    return _load_preset_from_file(preset_path)
 
 
 def parse_server_commands(args: list[str]) -> tuple[list[str], list[list[str]]]:
