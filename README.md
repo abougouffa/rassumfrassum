@@ -47,7 +47,7 @@ vim.lsp.enable('rass-python')
 
 Presets give you a uniform way to start typical sets of language
 servers for a given language, while being flexible enough for
-tweaking.  Most presets would be Python files with a `get_servers()`
+tweaking.  Most presets would be Python files with a `servers()`
 function that returns a list of server commands.  
 
 Advanced presets can hook into LSP messages to hide the typical
@@ -84,7 +84,7 @@ To use [ty][ty] instead of `basedpyright`, create `~/.config/rassumfrassum/pytho
 ```python
 """Python preset using ty instead of basedpyright."""
 
-def get_servers():
+def servers():
     return [
         ['ty', 'server'],
         ['ruff', 'server']

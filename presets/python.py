@@ -1,6 +1,6 @@
 """Python preset: basedpyright + ruff."""
 
-def get_servers():
+def servers():
     """Return basedpyright and ruff server commands."""
     return [
         ['basedpyright-langserver', '--stdio'],

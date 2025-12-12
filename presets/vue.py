@@ -39,7 +39,7 @@ class VueLogic(LspLogic):
         return await super().on_client_request(method, params, servers)
 
 
-def get_servers():
+def servers():
     """Return vue-language-server and tailwindcss-language-server."""
     return [
         ['vue-language-server', '--stdio'],
@@ -47,6 +47,6 @@ def get_servers():
     ]
 
 
-def get_logic_class():
+def logic_class():
     """Use custom VueLogic."""
     return VueLogic

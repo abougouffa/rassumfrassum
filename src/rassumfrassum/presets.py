@@ -59,8 +59,8 @@ def load_preset(name_or_path: str) -> PresetResult:
             # Fall back to bundled preset
             module = _load_preset_from_bundle(name_or_path)
 
-    servers_fn = getattr(module, 'get_servers', None)
-    lclass_fn = getattr(module, 'get_logic_class', None)
+    servers_fn = getattr(module, 'servers', None)
+    lclass_fn = getattr(module, 'logic_class', None)
 
     return (
         servers_fn() if servers_fn else [],
