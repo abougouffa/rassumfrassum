@@ -20,10 +20,11 @@ Install the `rass` tool:
 pip install rassumfrassum
 ```
 
-Now install some language servers, say Python's [ty][ty] and [ruff][ruff]:
+Now install some language servers, say Python's [basedpyright][basedpyright] and [ruff][ruff]:
 
-```
-pip install ty ruff
+```bash
+npm install -g basedpyright
+pip install ruff
 ```
 
 Tell your LSP client to call `rass python`:
@@ -55,7 +56,7 @@ initialization/configuration pains from clients, see
 
 ### Using Presets
 
-The bundled `python` preset runs [ty][ty] and [ruff][ruff]:
+The bundled `python` preset runs [basedpyright][basedpyright] and [ruff][ruff]:
 
 ```bash
 rass python
@@ -78,14 +79,14 @@ these locations in order:
 3. `~/.rassumfrassum/` (legacy)
 4. Bundled presets directory (last resort)
 
-To use `basedpyright` instead of `ty`, create `~/.config/rassumfrassum/python.py`:
+To use [ty][ty] instead of `basedpyright`, create `~/.config/rassumfrassum/python.py`:
 
 ```python
-"""Python preset using basedpyright instead of ty."""
+"""Python preset using ty instead of basedpyright."""
 
 def get_servers():
     return [
-        ['basedpyright-langserver', '--stdio'],
+        ['ty', 'server'],
         ['ruff', 'server']
     ]
 ```
@@ -248,6 +249,7 @@ subclassing `LspLogic`.
 [build-status]: https://github.com/joaotavora/rassumfrassum/actions/workflows/test.yml
 [lspx]: https://github.com/thefrontside/lspx
 [lsplex]: https://github.com/joaotavora/lsplex
+[basedpyright]: https://github.com/detachhead/basedpyright
 [ty]: https://github.com/astral-sh/ty
 [ruff]: https://github.com/astral-sh/ruff
 [neovim]: https://neovim.io/
